@@ -9,7 +9,7 @@ from contextlib import contextmanager
 from pathlib import Path
 import os
 import sysconfig
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 
 if not TYPE_CHECKING:
 
@@ -204,19 +204,19 @@ class NixStore:
         self.libnixutil.check_nix_error(err, self.context)
         return results
 
-def realise(path: str) -> list[BuildOutput]:
-    libnixstore = LibNixStore()
-    with libnixstore.open_store("") as store:
-        return store.realise(path)
 
-class NixStoreAsync:
-    def __init__(self) -> None:
-        # FIXME: could this be done with a thread pool instead?
-        self.executor = ProcessPoolExecutor(min(os.cpu_count() or 10, 10))
+class AsyncNixStore:
+    def __init__(self, store: NixStore):
+        self.store = store
+        self.executor = ThreadPoolExecutor(min(os.cpu_count() or 10, 10))
 
     async def realise(self, path: str) -> list[BuildOutput]:
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(self.executor, realise, path)
+
+        def realise() -> list[BuildOutput]:
+            return self.store.realise(path)
+
+        return await loop.run_in_executor(self.executor, realise)
 
 
 class LibNixStore:
@@ -231,6 +231,15 @@ class LibNixStore:
         with self.libnixutil.new_nix_c_context() as context:
             code = self.lib.nix_libstore_init(context)
             self.libnixutil.check_nix_error(code, context)
+
+    @contextmanager
+    def open_async_store(
+        self,
+        uri: str,
+        params: _Pointer[c_char_p] = POINTER(c_char_p)(),
+    ) -> Iterator[AsyncNixStore]:
+        with self.open_store(uri, params) as store:
+            yield AsyncNixStore(store)
 
     @contextmanager
     def open_store(
@@ -250,21 +259,27 @@ class LibNixStore:
 
 
 async def main() -> None:
+    if len(sys.argv) < 2:
+        print("Usage: build.py drv", file=sys.stderr)
+        sys.exit(1)
+    drv = sys.argv[1]
     try:
-        # sync
-        libnixstore = LibNixStore()
-        with libnixstore.open_store("") as store:
-            store.realise(
-                "/nix/store/db7nwijbhb8gywm9m83yxpv2di4yh56m-hello-2.12.1.drv",
-            )
         # async
-        await NixStoreAsync().realise(
-            "/nix/store/db7nwijbhb8gywm9m83yxpv2di4yh56m-hello-2.12.1.drv"
-        )
+        libnixstore = LibNixStore()
+        with libnixstore.open_async_store("") as store:
+            await asyncio.gather(
+                store.realise(drv),
+                store.realise(drv),
+                store.realise(drv),
+            )
+        # sync
+        with libnixstore.open_store("") as store:
+            store.realise(drv)
     except NixError as e:
         print(e, file=sys.stderr)
         sys.exit(1)
-    pass
+    except KeyboardInterrupt:
+        pass
 
 
 if __name__ == "__main__":
