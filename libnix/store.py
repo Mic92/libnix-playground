@@ -135,16 +135,12 @@ params_pair = ctypes.c_char_p * 2
 
 
 def _to_nix_params(params: dict[str, str]) -> _Pointer[_Pointer[c_char_p]]:
-    params_c = (POINTER(ctypes.c_char_p) * (len(params) + 1))()
-    i = 0
-    for k, v in params.items():
-        pair = params_pair()
-        pair[0] = k.encode()
-        pair[1] = v.encode()
-        params_c[i] = ctypes.cast(pair, ctypes.POINTER(ctypes.c_char_p))
-        i += 1
-    params_c[-1] = None
-    return ctypes.cast(params_c, ctypes.POINTER(ctypes.POINTER(ctypes.c_char_p)))
+    params_list = (POINTER(ctypes.c_char_p) * (len(params) + 1))()
+    for i, (key, value) in enumerate(params.items()):
+        pair = params_pair(key.encode(), value.encode())
+        params_list[i] = ctypes.cast(pair, ctypes.POINTER(ctypes.c_char_p))
+    params_list[-1] = None
+    return ctypes.cast(params_list, ctypes.POINTER(ctypes.POINTER(ctypes.c_char_p)))
 
 
 class LibNixStore:
