@@ -235,7 +235,7 @@ class LibNixStore:
     @contextmanager
     def open_async_store(
         self,
-        uri: str,
+        uri: str="",
         params: _Pointer[c_char_p] = POINTER(c_char_p)(),
     ) -> Iterator[AsyncNixStore]:
         with self.open_store(uri, params) as store:
@@ -244,7 +244,7 @@ class LibNixStore:
     @contextmanager
     def open_store(
         self,
-        uri: str,
+        uri: str="",
         params: _Pointer[c_char_p] = POINTER(c_char_p)(),
     ) -> Iterator[NixStore]:
         with self.libnixutil.new_nix_c_context() as context:
@@ -266,14 +266,14 @@ async def main() -> None:
     try:
         # async
         libnixstore = LibNixStore()
-        with libnixstore.open_async_store("") as store:
+        with libnixstore.open_async_store() as store:
             await asyncio.gather(
                 store.realise(drv),
                 store.realise(drv),
                 store.realise(drv),
             )
         # sync
-        with libnixstore.open_store("") as store:
+        with libnixstore.open_store() as store:
             store.realise(drv)
     except NixError as e:
         print(e, file=sys.stderr)
