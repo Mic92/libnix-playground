@@ -18,7 +18,7 @@
     flake-parts.lib.mkFlake { inherit inputs; } ({ lib, ... }: {
       systems = lib.systems.flakeExposed;
       perSystem = { inputs', pkgs, ... }: {
-        devShells.default = pkgs.callPackage ./shell.nix {
+        devShells.default = pkgs.python3.pkgs.callPackage ./shell.nix {
           nix = inputs'.nix.packages.nix;
         };
       };
