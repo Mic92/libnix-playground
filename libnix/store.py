@@ -171,7 +171,6 @@ class LibNixStore:
         uri: str | Path = "",
         params: dict[str, str] = {},
     ) -> Iterator[NixStore]:
-        breakpoint()
 
         with self.libnixutil.new_nix_c_context() as context:
             store = self.lib.nix_store_open(
